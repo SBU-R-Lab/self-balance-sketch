@@ -12,8 +12,40 @@ short gyro[3];
 short accel[3];
 long quat[4];
 unsigned long timestamp;
-unsigned short sensors;
+short sensors;
 unsigned char more;
+String input = "";
+
+void setPwmFrequency(int pin, int divisor) {
+  byte mode;
+  if(pin == 5 || pin == 6 || pin == 9 || pin == 10) {
+    switch(divisor) {
+      case 1: mode = 0x01; break;
+      case 8: mode = 0x02; break;
+      case 64: mode = 0x03; break;
+      case 256: mode = 0x04; break;
+      case 1024: mode = 0x05; break;
+      default: return;
+    }
+    if(pin == 5 || pin == 6) {
+      TCCR0B = TCCR0B & 0b11111000 | mode;
+    } else {
+      TCCR1B = TCCR1B & 0b11111000 | mode;
+    }
+  } else if(pin == 3 || pin == 11) {
+    switch(divisor) {
+      case 1: mode = 0x01; break;
+      case 8: mode = 0x02; break;
+      case 32: mode = 0x03; break;
+      case 64: mode = 0x04; break;
+      case 128: mode = 0x05; break;
+      case 256: mode = 0x06; break;
+      case 1024: mode = 0x07; break;
+      default: return;
+    }
+    TCCR2B = TCCR2B & 0b11111000 | mode;
+  }
+}
 
 
 void interrupt()
@@ -62,6 +94,15 @@ void setup() {
   Wire.setClock(400000);
 
   Serial.begin(115200);
+  pinMode(4, OUTPUT);
+  pinMode(5, OUTPUT);
+
+  digitalWrite(4, LOW);
+  digitalWrite(5, LOW);
+
+  setPwmFrequency(3, 1);
+
+  analogWrite(3, 0);
 
   mpu_init(&params);
   mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL);
@@ -95,10 +136,39 @@ void loop() {
 
     quat_to_euler(quat_float, euler);
 
+    //Serial.println(euler[0]*180/M_PI);
+    //Serial.println(euler[1]*180/M_PI);
+    //Serial.println(euler[2]*180/M_PI);
+  }
 
-
-    Serial.println(euler[0]*180/M_PI);
-    Serial.println(euler[1]*180/M_PI);
-    Serial.println(euler[2]*180/M_PI);
+  if(Serial.available()) {
+    char temp = Serial.read();
+    if(temp != '\n') {
+      input += temp;
+    } else {
+      char direction = input.charAt(0);
+      input.setCharAt(0, '0');
+      int pwm = input.toInt();
+      
+      if(pwm > 255) 
+        pwm = 255;
+      if(pwm < 0)
+        pwm = 0;
+        
+      if(direction == 'R') {
+          analogWrite(3, pwm);
+          digitalWrite(4, HIGH);
+          digitalWrite(5, LOW);
+      } else if (direction == 'L') {
+          analogWrite(3, pwm);
+          digitalWrite(4, LOW);
+          digitalWrite(5, HIGH);
+      } else {
+          analogWrite(3, 0);
+          digitalWrite(4, LOW);
+          digitalWrite(5, LOW);
+      }
+      input = "";
+    }
   }
 }
